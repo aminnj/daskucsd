@@ -13,6 +13,8 @@ cd -
 
 export PYTHONPATH=$(pwd):$PYTHONPATH
 
-dask-scheduler --dashboard --show --port 50123
+dask-scheduler --help
 
 EOF
+
+# dask-scheduler --dashboard --show --port 50123

@@ -28,13 +28,22 @@ hostname
 
 mkdir temp
 cd temp
+
+export SCRAM_ARCH=slc6_amd64_gcc700
+export CMSSWVERSION=CMSSW_10_5_0
+eval `scramv1 project CMSSW $CMSSWVERSION`
+cd $CMSSWVERSION
+eval `scramv1 runtime -sh`
+cd -
+
 mv ../workerenv.tar.xz .
 mv ../*.py .
 tar xf workerenv.tar.xz
 
+source workerenv/bin/activate
+
 ls -lrth
 export PATH=`pwd`/workerenv/bin:$PATH
-export LC_ALL=C.UTF-8
 
 echo $PATH
 echo $PYTHONPATH
@@ -44,5 +53,4 @@ which pip3
 python3 -V
 
 SCHEDULERADDRESS="$1"
-dask-worker $SCHEDULERADDRESS --memory-limit 8GB --nprocs 1 --nthreads 1
-
+dask-worker $SCHEDULERADDRESS --memory-limit 8GB --nprocs 1 --nthreads 1 --preload cachepreload.py

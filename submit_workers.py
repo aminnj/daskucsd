@@ -10,7 +10,7 @@ should_transfer_files   = YES
 when_to_transfer_output = ON_EXIT_OR_EVICT
 transfer_output_files = ""
 Transfer_Executable     = True
-transfer_input_files    = workerenv.tar.xz
+transfer_input_files    = cachepreload.py,workerenv.tar.xz
 output                  = logs/1e.$(Cluster).$(Process).out
 error                   = logs/1e.$(Cluster).$(Process).err
 log                     = logs/$(Cluster).log
@@ -19,12 +19,13 @@ RequestCpus = 1
 RequestMemory = 6000
 RequestDisk = 6000
 +DESIRED_Sites="T2_US_UCSD"
-+SingularityImage="/cvmfs/singularity.opensciencegrid.org/mintproject/hand:latest"
++SingularityImage="/cvmfs/singularity.opensciencegrid.org/bbockelm/cms:rhel6"
 JobBatchName = "daskworker"
-Requirements = ((HAS_SINGULARITY=?=True) && (HAS_CVMFS_cms_cern_ch =?= true) && (regexp("el7",OSGVO_OS_KERNEL)) && {extra_requirements})
+Requirements = ((HAS_SINGULARITY=?=True) && (HAS_CVMFS_cms_cern_ch =?= true) && {extra_requirements})
 Arguments = {scheduler_url}
 queue {num_workers}
 """
+# Requirements = ((HAS_SINGULARITY=?=True) && (HAS_CVMFS_cms_cern_ch =?= true) && (regexp("el7",OSGVO_OS_KERNEL)) && {extra_requirements})
 
 if __name__ == "__main__":
 

@@ -21,7 +21,6 @@ echo "Making workerenv.tar.xz"
 tar --exclude='__pycache__' -cJf workerenv.tar.xz workerenv/
 echo "Done"
 
-python3 -c "import lzma"
 python3 -c "from backports.lzma import compress; print(compress)"
 
 EOF
