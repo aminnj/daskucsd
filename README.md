@@ -8,6 +8,19 @@ git clone https://github.com/aminnj/daskucsd
 cd daskucsd
 ```
 
-holy... it works finally.
-abusing singularity containers + CMSSW + virtualenvs + PYTHONPATH hacking,
-but it finally works...locally for now.
+Make worker environment
+```bash
+./make_worker_tarball.sh
+```
+
+Submit some workers
+```bash
+python submit_workers.py -n 10
+```
+
+Start analysis jupyter notebook
+```bash
+./start_analysis_server.sh
+```
+For testing without condor, use `start_dask_scheduler.sh` and `start_dask_worker.sh`.
+

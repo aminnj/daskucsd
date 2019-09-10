@@ -13,13 +13,15 @@ export PYTHONUSERBASE=x
 python3 -m venv workerenv
 
 . workerenv/bin/activate
-pip3 install psutil dask distributed uproot backports.lzma xxhash blosc
+pip3 install tqdm blosc awkward uproot backports.lzma
 
 sed -i 's|#!.*/python|#!/usr/bin/env python|' workerenv/bin/dask-*
+sed -i 's/raise KeyError/print/' workerenv/lib/python3.6/site-packages/awkward/persist.py
 
 echo "Making workerenv.tar.xz"
 tar --exclude='__pycache__' -cJf workerenv.tar.xz workerenv/
 echo "Done"
+
 
 python3 -c "from backports.lzma import compress; print(compress)"
 
