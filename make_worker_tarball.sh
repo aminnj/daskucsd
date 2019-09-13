@@ -13,7 +13,8 @@ export PYTHONUSERBASE=x
 python3 -m venv workerenv
 
 . workerenv/bin/activate
-pip3 install psutil dask distributed uproot backports.lzma xxhash blosc
+pip3 install psutil dask[dataframe] distributed uproot backports.lzma==0.0.13 xxhash blosc
+pip3 install numexpr numba --ignore-installed
 
 sed -i 's|#!.*/python|#!/usr/bin/env python|' workerenv/bin/dask-*
 
