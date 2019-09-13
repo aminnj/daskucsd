@@ -13,7 +13,7 @@ export PYTHONUSERBASE=x
 [ -d analysisenv ] || {
     python3 -m venv analysisenv
     . analysisenv/bin/activate
-    pip3 install dask distributed uproot matplotlib coffea jupyter tqdm pandas lz4 cloudpickle bokeh jupyter-server-proxy backports.lzma xxhash blosc snakeviz --ignore-installed
+    pip3 install dask[dataframe] distributed uproot matplotlib coffea jupyter tqdm pandas lz4 cloudpickle bokeh jupyter-server-proxy backports.lzma==0.0.13 xxhash blosc snakeviz numba numexpr --ignore-installed
     rm -rf analysisenv/lib/python3.6/site-packages/psutil*
 }
 
