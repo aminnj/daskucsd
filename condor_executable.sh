@@ -36,11 +36,16 @@ cd $CMSSWVERSION
 eval `scramv1 runtime -sh`
 cd -
 
-mv ../workerenv.tar.xz .
+mv ../workerenv.tar.* .
 mv ../*.py .
-tar xf workerenv.tar.xz
+echo "started extracting at $(date +%s)"
+tar xf workerenv.tar.*
+echo "finished extracting at $(date +%s)"
 
 source workerenv/bin/activate
+
+# # If tarball gets too big, could just xrdcp it...
+# xrdcp root://redirector.t2.ucsd.edu//store/user/namin/RunIIAutumn18MiniAOD_ex9_vh_99.root .
 
 ls -lrth
 export PYTHONPATH=`pwd`:$PYTHONPATH
@@ -49,9 +54,13 @@ export PATH=`pwd`/workerenv/bin:$PATH
 echo $PATH
 echo $PYTHONPATH
 
+which python
 which python3
+which pip
 which pip3
+python -V
 python3 -V
 
 SCHEDULERADDRESS="$1"
 dask-worker $SCHEDULERADDRESS --memory-limit 8GB --nprocs 1 --nthreads 1 --preload cachepreload.py
+

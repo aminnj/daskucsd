@@ -10,7 +10,7 @@ should_transfer_files   = YES
 when_to_transfer_output = ON_EXIT_OR_EVICT
 transfer_output_files = ""
 Transfer_Executable     = True
-transfer_input_files    = utils.py,cachepreload.py,workerenv.tar.xz
+transfer_input_files    = utils.py,cachepreload.py,workerenv.tar.gz
 output                  = logs/1e.$(Cluster).$(Process).out
 error                   = logs/1e.$(Cluster).$(Process).err
 log                     = logs/$(Cluster).log
@@ -18,6 +18,7 @@ executable              = condor_executable.sh
 RequestCpus = 1
 RequestMemory = 6000
 RequestDisk = 6000
+x509userproxy={proxy}
 +DESIRED_Sites="T2_US_UCSD"
 +SingularityImage="/cvmfs/singularity.opensciencegrid.org/bbockelm/cms:rhel6"
 JobBatchName = "daskworker"
@@ -63,6 +64,7 @@ if __name__ == "__main__":
             extra_requirements=extra_requirements,
             num_workers=args.num_workers,
             scheduler_url=scheduler_url,
+            proxy="/tmp/x509up_u{0}".format(os.getuid()),
             )
 
     f = tempfile.NamedTemporaryFile(delete=False)
