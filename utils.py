@@ -45,32 +45,37 @@ def bokeh_output_notebook():
     from bokeh.io import output_notebook
     output_notebook()
 
-def plot_timeflow(tsdata):
+def plot_timeflow(taskstream):
+    """
+    taskstream from `client.get_task_stream(count=len(futures))`
+    """
     from bokeh.io import show, output_notebook
     from bokeh.models import ColumnDataSource
     from bokeh.plotting import figure
     import pandas as pd
 
-    df = pd.DataFrame(tsdata)
+    df = pd.DataFrame(taskstream)
     df["tstart"] = df["startstops"].str[0].str[1]
     df["tstop"] = df["startstops"].str[0].str[2]
     df = df[["worker","tstart","tstop"]].sort_values(["worker","tstart"])
     df[["tstart","tstop"]] -= df["tstart"].min()
-    df["duration"] = df["tstop"] - df["tstart"]
     df["worker"] = df["worker"].str.replace("tcp://","")
 
     if df["tstop"].max() > 10.: mult, unit = 1, "s"
     else: mult, unit = 1000, "ms"
 
     df[["tstart","tstop"]] *= mult
+    df["duration"] = df["tstop"] - df["tstart"]
 
     group = df.groupby("worker")
     source = ColumnDataSource(group)
 
     wtime = (df["tstop"]-df["tstart"]).sum()
-    ttime = df["tstop"].max()*df["worker"].nunique()
+    nworkers = df["worker"].nunique()
+    ttime = df["tstop"].max()*nworkers
     title = (", ".join([
-        "efficiency (filled/total) = {:.1f}%".format(100.0*wtime/ttime),
+        "{} workers".format(nworkers),
+        "efficiency = {:.1f}%".format(100.0*wtime/ttime),
         "median task time = {:.2f}{}".format(group.apply(lambda x:x["tstop"]-x["tstart"]).median(),unit),
         "median intertask time = {:.2f}{}".format(group.apply(lambda x:x["tstart"].shift(-1)-x["tstop"]).median(),unit),
         ]))
@@ -95,12 +100,15 @@ def plot_timeflow(tsdata):
         show(p)
 
 
-def plot_cumulative_events(results,futures,chunks, ax=None):
+def plot_cumulative_events(taskstream,futures,chunks, ax=None):
+    """
+    taskstream from `client.get_task_stream(count=len(futures))`
+    """
     import pandas as pd
     import matplotlib.pyplot as plt
     import numpy as np
     lut = dict((future.key,chunk) for future,chunk in zip(futures,chunks))
-    df = pd.DataFrame(results)
+    df = pd.DataFrame(taskstream)
     df["chunk"] = df.key.map(lut)
     df["estart"] = df["chunk"].str[1]
     df["estop"] = df["chunk"].str[2]
@@ -136,4 +144,28 @@ def plot_cumulative_events(results,futures,chunks, ax=None):
     ax.set_title("Processed {:.2f}Mevents in {:.2f}s @ {:.3f}MHz".format(
         ys.max(), xs.max(), ys.max()/xs.max()))
     ax.legend()
-    
+
+def get_tree_and_cache(fname):
+    """
+    return (potentially cached) uproot tree object and array/branch cache object
+    works on worker and locally, though locally no caching is done
+    """
+    from distributed import get_worker
+    islocal = False
+    try:
+        worker = get_worker()
+    except ValueError:
+        islocal = True
+    import uproot
+    cache = None
+    if islocal:
+        t = uproot.open(fname)["Events"]
+    else:
+        if fname in worker.tree_cache:
+            t = worker.tree_cache[fname]
+        else:
+            t = uproot.open(fname)["Events"]
+            worker.tree_cache[fname] = t
+        cache = worker.array_cache
+        worker.nevents += len(t)
+    return t, cache

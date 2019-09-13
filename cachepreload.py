@@ -13,8 +13,11 @@ def dask_setup(worker):
                 k, v = line.split("=", 1)
                 d[k.strip()] = v.strip().lstrip('"').strip('"')
         return d
+    worker.classads = get_classads()
 
     worker.array_cache = None
+    worker.tree_cache = {}
+    worker.nevents = 0
     try:
         import uproot
         worker.array_cache = uproot.ArrayCache("6 GB")
@@ -23,4 +26,19 @@ def dask_setup(worker):
     except AttributeError as e:
         print(e, " Maybe this is an older version of uproot without ArrayCache?")
 
-    worker.classads = get_classads()
+    def cachesize_metric(worker):
+        if hasattr(worker,"array_cache"):
+            return "{:.2f}GB".format(worker.array_cache._cache.currsize/1e9)
+        return 0
+    def numtreescached_metric(worker):
+        if hasattr(worker,"tree_cache"):
+            return len(list(worker.tree_cache.keys()))
+        return 0
+    def nevents_metric(worker):
+        if hasattr(worker,"nevents"):
+            return "{:.2f}M".format(worker.nevents/1e6)
+        return 0
+
+    worker.metrics["cachesize"] = cachesize_metric
+    worker.metrics["numtreescached"] = numtreescached_metric
+    worker.metrics["eventsprocessed"] = nevents_metric
