@@ -8,7 +8,7 @@ git clone https://github.com/aminnj/daskucsd
 cd daskucsd
 ```
 
-Install conda and get all the dependencies
+Install conda and get all the dependencies:
 ```
 curl -O -L https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
 bash Miniconda3-latest-Linux-x86_64.sh -b 
@@ -24,23 +24,21 @@ conda install --name base conda-pack -y
 conda create --name workerenv uproot dask -y
 conda create --name analysisenv uproot dask matplotlib pandas jupyter hdfs3 -y
 
-conda pack -n workerenv --arcroot workerenv -f --format tar.gz --compress-level 9 -j 8 --exclude "*.pyc" --exclude "*.js.map" --exclude "*.a"
-
+conda pack -n workerenv --arcroot workerenv -f --format tar.gz \
+    --compress-level 9 -j 8 --exclude "*.pyc" --exclude "*.js.map" --exclude "*.a"
 ```
 
-Start dask scheduler in a GNU screen/separate terminal
+Start dask scheduler in a GNU screen/separate terminal:
 ```
-conda activate analysisenv
-dask-scheduler --dashboard --show --port 50123
+( conda activate analysisenv && dask-scheduler --dashboard --show --port 50123 )
 ```
 
-Submit some workers
+Submit some workers:
 ```bash
 python submit_workers.py -r <hostname:port of scheduler> -n 10
 ```
 
-Start analysis jupyter notebook
+Start analysis jupyter notebook:
 ```bash
-conda activate analysisenv
-jupyter notebook --no-browser
+( conda activate analysisenv && jupyter notebook --no-browser )
 ```
