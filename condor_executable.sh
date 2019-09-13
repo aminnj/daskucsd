@@ -43,6 +43,7 @@ tar xf workerenv.tar.xz
 source workerenv/bin/activate
 
 ls -lrth
+export PYTHONPATH=`pwd`:$PYTHONPATH
 export PATH=`pwd`/workerenv/bin:$PATH
 
 echo $PATH
