@@ -145,13 +145,15 @@ def plot_cumulative_events(taskstream,futures,chunks, ax=None):
         ys.max(), xs.max(), ys.max()/xs.max()))
     ax.legend()
 
-def get_tree_and_cache(fname):
+def get_tree_and_branchcache(fname,cache_tree=True,cache_branches=True,xrootd=False):
     """
     return (potentially cached) uproot tree object and array/branch cache object
     works on worker and locally, though locally no caching is done
     """
     from distributed import get_worker
     islocal = False
+    if xrootd:
+        fname = fname.replace("/hadoop/cms","root://redirector.t2.ucsd.edu/")
     try:
         worker = get_worker()
     except ValueError:
@@ -161,11 +163,14 @@ def get_tree_and_cache(fname):
     if islocal:
         t = uproot.open(fname)["Events"]
     else:
-        if fname in worker.tree_cache:
+        if not cache_tree:
+            t = uproot.open(fname)["Events"]
+        elif fname in worker.tree_cache:
             t = worker.tree_cache[fname]
         else:
             t = uproot.open(fname)["Events"]
             worker.tree_cache[fname] = t
-        cache = worker.array_cache
+        if cache_branches:
+            cache = worker.array_cache
         worker.nevents += len(t)
     return t, cache

@@ -20,17 +20,23 @@ bash Miniconda3-latest-Linux-x86_64.sh -b
 conda config --set auto_activate_base false
 conda config --add channels conda-forge
 
+# install package to tarball environments
 conda install --name base conda-pack -y
+
+# create environments with as much stuff from anaconda
 conda create --name workerenv uproot dask -y
 conda create --name analysisenv uproot dask matplotlib pandas jupyter hdfs3 -y
+# and then install residual packages with pip
+conda run --name analysisenv pip install jupyter-server-proxy
 
+# make the tarball for the worker nodes
 conda pack -n workerenv --arcroot workerenv -f --format tar.gz \
     --compress-level 9 -j 8 --exclude "*.pyc" --exclude "*.js.map" --exclude "*.a"
 ```
 
 Start dask scheduler in a GNU screen/separate terminal:
 ```
-( conda activate analysisenv && dask-scheduler --dashboard --show --port 50123 )
+( conda activate analysisenv && dask-scheduler --port 50123 )
 ```
 
 Submit some workers:
