@@ -62,5 +62,5 @@ python -V
 python3 -V
 
 SCHEDULERADDRESS="$1"
-dask-worker $SCHEDULERADDRESS --memory-limit 8GB --nprocs 1 --nthreads 1 --preload cachepreload.py
+dask-worker $SCHEDULERADDRESS --memory-limit 5GB --nprocs 1 --nthreads 1 --preload cachepreload.py
 

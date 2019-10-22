@@ -132,6 +132,9 @@ def plot_cumulative_events(taskstream,futures,chunks, ax=None):
     y1 = (4*x1**2 - 2) * np.exp(-x1**2) / smooth_width*8
     y_conv = np.convolve(ys, y1, mode="same")
     central = (np.abs(y_conv) < y_conv.std()/2.0)
+    if central.sum() < 3:
+        central = np.ones(len(xs))>0
+        print("Warning! Didn't find a good flat region to fit. Taking everything.")
     m, b = np.polyfit(xs[central], ys[central], 1)
     # fit again with points closest to the first fit
     resids = (m*xs+b)-ys

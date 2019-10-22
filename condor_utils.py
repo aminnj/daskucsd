@@ -16,8 +16,8 @@ error                   = logs/1e.$(Cluster).$(Process).err
 log                     = logs/$(Cluster).log
 executable              = condor_executable.sh
 RequestCpus = 1
-RequestMemory = 6000
-RequestDisk = 6000
+RequestMemory = {memory}
+RequestDisk = {disk}
 x509userproxy={proxy}
 +DESIRED_Sites="T2_US_UCSD"
 +SingularityImage="/cvmfs/singularity.opensciencegrid.org/bbockelm/cms:rhel6"
@@ -33,7 +33,8 @@ def submit_workers(scheduler_url, dry_run=False, num_workers=1, blacklisted_mach
             "sdsc-68.t2.ucsd.edu",
             "cabinet-7-7-36.t2.ucsd.edu",
             "cabinet-8-8-1.t2.ucsd.edu",
-    ], whitelisted_machines=[]):
+            "cabinet-4-4-18.t2.ucsd.edu",
+    ], memory=4000, disk=20000, whitelisted_machines=[]):
 
     if not scheduler_url:
         try:
@@ -54,6 +55,8 @@ def submit_workers(scheduler_url, dry_run=False, num_workers=1, blacklisted_mach
             num_workers=num_workers,
             scheduler_url=scheduler_url,
             proxy="/tmp/x509up_u{0}".format(os.getuid()),
+            memory=memory,
+            disk=disk,
             )
 
     f = tempfile.NamedTemporaryFile(delete=False)
