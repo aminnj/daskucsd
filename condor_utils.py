@@ -73,7 +73,7 @@ class UCSDHTCondorJob(HTCondorJob):
     # right after -queue 1, then condor thinks it's an argument to -queue, hence the -debug
     # sandwiched in between
     submit_command = "condor_submit -queue 1 -debug"
-    executable = "condor_executable.sh"
+    executable = "condor_executable_jobqueue.sh"
     config_name = "htcondor"
 
     def job_script(self):
