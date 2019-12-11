@@ -1,6 +1,8 @@
 Getting [dask](https://distributed.dask.org/en/latest/) up and running at the local T2, based on [this](https://github.com/aminnj/redis-htcondor).
 
-## Quick start
+## "Quick" start
+
+### Installation
 
 Clone the repository and work inside it:
 ```bash
@@ -35,6 +37,14 @@ conda pack -n workerenv --arcroot workerenv -f --format tar.gz \
     --compress-level 9 -j 8 --exclude "*.pyc" --exclude "*.js.map" --exclude "*.a"
 ```
 
+
+### Do some analysis
+
+Need a scheduler and a set of workers. You can either set up do this manually 
+with some bash processes, or automatically within a jupyter notebook.
+
+#### Manually
+
 Start dask scheduler in a GNU screen/separate terminal:
 ```
 ( conda activate analysisenv && dask-scheduler --port 50123 )
@@ -48,4 +58,12 @@ python condor_utils.py -r <hostname:port of scheduler> -n 10
 Start analysis jupyter notebook:
 ```bash
 ( conda activate analysisenv && jupyter notebook --no-browser )
+```
+
+#### Automatically
+
+Start analysis jupyter notebook:
+```bash
+( conda activate analysisenv && jupyter notebook --no-browser )
+# and then open `cluster.ipynb`
 ```
