@@ -13,10 +13,10 @@ Install conda and get all the dependencies:
 curl -O -L https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
 bash Miniconda3-latest-Linux-x86_64.sh -b 
 
-# adds conda to the end of ~/.bashrc, so relogin after executing this line
+# add conda to the end of ~/.bashrc, so relogin after executing this line
 ~/miniconda3/bin/conda init
 
-# stops conda from activating the base environment on login
+# stop conda from activating the base environment on login
 conda config --set auto_activate_base false
 conda config --add channels conda-forge
 
@@ -27,7 +27,8 @@ conda install --name base conda-pack -y
 conda create --name workerenv uproot dask -y
 conda create --name analysisenv uproot dask matplotlib pandas jupyter hdfs3 -y
 # and then install residual packages with pip
-conda run --name analysisenv pip install jupyter-server-proxy
+conda run --name workerenv pip install dask-jobqueue
+conda run --name analysisenv pip install jupyter-server-proxy dask-jobqueue
 
 # make the tarball for the worker nodes
 conda pack -n workerenv --arcroot workerenv -f --format tar.gz \
@@ -41,7 +42,7 @@ Start dask scheduler in a GNU screen/separate terminal:
 
 Submit some workers:
 ```bash
-python submit_workers.py -r <hostname:port of scheduler> -n 10
+python condor_utils.py -r <hostname:port of scheduler> -n 10
 ```
 
 Start analysis jupyter notebook:

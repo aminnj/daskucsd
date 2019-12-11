@@ -4,7 +4,18 @@ import os
 import tempfile
 import argparse
 
-template = """
+from dask_jobqueue.htcondor import HTCondorJob, HTCondorCluster, quote_environment
+
+def submit_workers(scheduler_url, dry_run=False, num_workers=1, blacklisted_machines=[
+            "sdsc-49.t2.ucsd.edu",
+            "sdsc-50.t2.ucsd.edu",
+            "sdsc-68.t2.ucsd.edu",
+            "cabinet-7-7-36.t2.ucsd.edu",
+            "cabinet-8-8-1.t2.ucsd.edu",
+            "cabinet-4-4-18.t2.ucsd.edu",
+    ], memory=4000, disk=20000, whitelisted_machines=[]):
+
+    template = """
 universe                = vanilla
 should_transfer_files   = YES
 when_to_transfer_output = ON_EXIT_OR_EVICT
@@ -25,24 +36,7 @@ JobBatchName = "daskworker"
 Requirements = ((HAS_SINGULARITY=?=True) && (HAS_CVMFS_cms_cern_ch =?= true) && {extra_requirements})
 Arguments = {scheduler_url}
 queue {num_workers}
-"""
-
-def submit_workers(scheduler_url, dry_run=False, num_workers=1, blacklisted_machines=[
-            "sdsc-49.t2.ucsd.edu",
-            "sdsc-50.t2.ucsd.edu",
-            "sdsc-68.t2.ucsd.edu",
-            "cabinet-7-7-36.t2.ucsd.edu",
-            "cabinet-8-8-1.t2.ucsd.edu",
-            "cabinet-4-4-18.t2.ucsd.edu",
-    ], memory=4000, disk=20000, whitelisted_machines=[]):
-
-    if not scheduler_url:
-        try:
-            from config import SCHEDULER_URL as default_scheduler_url
-            scheduler_url = default_scheduler_url
-        except ImportError as e:
-            raise Exception("You didn't specify a scheduler url, and I couldn't find one in config.SCHEDULER_URL")
-
+    """
 
     extra_requirements = "True"
     if blacklisted_machines:
@@ -71,6 +65,87 @@ def submit_workers(scheduler_url, dry_run=False, num_workers=1, blacklisted_mach
         os.system("condor_submit " + filename)
 
     # f.unlink(filename)
+
+class UCSDHTCondorJob(HTCondorJob):
+
+    # DEFAULT: submit_command = "condor_submit -queue 1 -file"
+    # -file doesn't exist for this condor version, and if the submit file name gets put
+    # right after -queue 1, then condor thinks it's an argument to -queue, hence the -debug
+    # sandwiched in between
+    submit_command = "condor_submit -queue 1 -debug"
+    executable = "condor_executable.sh"
+    config_name = "htcondor"
+
+    def job_script(self):
+        """ Construct a job submission script """
+        quoted_environment = quote_environment(self.env_dict)
+        job_header_lines = "\n".join(
+            "%s = %s" % (k, v) for k, v in self.job_header_dict.items()
+        )
+        return self._script_template % {
+            "shebang": self.shebang,
+            "job_header": job_header_lines,
+            "quoted_environment": quoted_environment,
+            "quoted_arguments": self._command_template,
+            "executable": self.executable,
+        }
+
+class UCSDHTCondorCluster(HTCondorCluster):
+    job_cls = UCSDHTCondorJob
+    config_name = "htcondor"
+
+def make_sure_exists(path, make=False):
+    if not os.path.exists(path):
+        if not make:
+            raise Exception("Input {} doesn't exist".format(path))
+        else:
+            os.system("mkdir -p {}".format(path))
+
+
+def make_htcondor_cluster(
+        disk = "4GB",
+        memory = "2GB",
+        cores = 1,
+        local=False,
+        dashboard_address=8787,
+        ):
+
+    input_files = ["utils.py","cachepreload.py","workerenv.tar.gz"]
+    log_directory = "logs/"
+    proxy_file = "/tmp/x509up_u{0}".format(os.getuid())
+
+    [make_sure_exists(p) for p in input_files + [proxy_file]]
+    make_sure_exists(log_directory, make=True)
+
+
+    params = {
+            "disk": disk,
+            "memory": memory,
+            "cores": cores,
+            "log_directory": log_directory,
+            "dashboard_address": dashboard_address,
+            "python": "python",
+            "job_extra":  {
+                "should_transfer_files": "YES",
+                "when_to_transfer_output": "ON_EXIT_OR_EVICT",
+                "transfer_output_files": "",
+                "Transfer_Executable": "True",
+                "transfer_input_files": ",".join(input_files),
+                "JobBatchName": '"daskworker"',
+                "x509userproxy": proxy_file,
+                "+SingularityImage":'"/cvmfs/singularity.opensciencegrid.org/bbockelm/cms:rhel6"',
+                "Stream_Output": False,
+                "Stream_Error": False,
+                "+DESIRED_Sites":'"T2_US_UCSD"',
+                "Requirements": '((HAS_SINGULARITY=?=True) && (HAS_CVMFS_cms_cern_ch =?= true) && (TARGET.Machine != "sdsc-18.t2.ucsd.edu") && (TARGET.Machine != "sdsc-20.t2.ucsd.edu") && (TARGET.Machine != "cabinet-7-7-36.t2.ucsd.edu") && (TARGET.Machine != "cabinet-4-4-18.t2.ucsd.edu"))',
+                },
+            }
+    if local:
+        params["+DESIRED_Sites"] = '"UAF"'
+        params["Requirements"] = ''
+
+    cluster = UCSDHTCondorCluster(**params)
+    return cluster
 
 if __name__ == "__main__":
 
