@@ -62,8 +62,16 @@ Start analysis jupyter notebook:
 
 #### Automatically
 
-Start analysis jupyter notebook:
 ```bash
 ( conda activate analysisenv && jupyter notebook --no-browser )
-# and then open `cluster.ipynb`
 ```
+and then run `cluster.ipynb`.
+
+## Misc notes
+
+To forward port locally:
+```
+ps aux | grep "localhost:$PORT" | grep -v "grep" | awk '{print $2}' | xargs kill -9
+ssh -N -f -L localhost:$PORT:localhost:$PORT $HOST
+```
+
