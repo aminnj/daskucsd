@@ -42,3 +42,10 @@ def dask_setup(worker):
     worker.metrics["cachesize"] = cachesize_metric
     worker.metrics["numtreescached"] = numtreescached_metric
     worker.metrics["eventsprocessed"] = nevents_metric
+
+    try:
+        # Load some imports initially
+        import coffea.processor
+        import coffea.executor
+    except:
+        pass
