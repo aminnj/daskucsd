@@ -103,8 +103,8 @@ def make_sure_exists(path, make=False):
 
 
 def make_htcondor_cluster(
-        disk = "4GB",
-        memory = "2GB",
+        disk = "8GB",
+        memory = "4GB",
         cores = 1,
         local=False,
         dashboard_address=8787,
