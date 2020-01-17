@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 
+function getjobad {
+    grep -i "^$1" "$_CONDOR_JOB_AD" | cut -d= -f2- | xargs echo
+}
+
 if [ -r "$OSGVO_CMSSW_Path"/cmsset_default.sh ]; then source "$OSGVO_CMSSW_Path"/cmsset_default.sh
 elif [ -r "$OSG_APP"/cmssoft/cms/cmsset_default.sh ]; then source "$OSG_APP"/cmssoft/cms/cmsset_default.sh
 elif [ -r /cvmfs/cms.cern.ch/cmsset_default.sh ]; then source /cvmfs/cms.cern.ch/cmsset_default.sh
