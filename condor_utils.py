@@ -6,6 +6,8 @@ import argparse
 
 from dask_jobqueue.htcondor import HTCondorJob, HTCondorCluster, quote_environment
 
+BASEDIR = os.path.dirname(os.path.realpath(__file__))
+
 def submit_workers(scheduler_url, dry_run=False, num_workers=1, blacklisted_machines=[
             "sdsc-49.t2.ucsd.edu",
             "sdsc-50.t2.ucsd.edu",
@@ -73,7 +75,7 @@ class UCSDHTCondorJob(HTCondorJob):
     # right after -queue 1, then condor thinks it's an argument to -queue, hence the -debug
     # sandwiched in between
     submit_command = "condor_submit -queue 1 -debug"
-    executable = "condor_executable_jobqueue.sh"
+    executable = os.path.join(BASEDIR, "condor_executable_jobqueue.sh")
     config_name = "htcondor"
 
     def job_script(self):
@@ -110,8 +112,8 @@ def make_htcondor_cluster(
         dashboard_address=8787,
         ):
 
-    input_files = ["utils.py","cachepreload.py","workerenv.tar.gz"]
-    log_directory = "logs/"
+    input_files = [os.path.join(BASEDIR, x) for x in ["utils.py","cachepreload.py","workerenv.tar.gz"]]
+    log_directory = os.path.join(BASEDIR, "logs/")
     proxy_file = "/tmp/x509up_u{0}".format(os.getuid())
 
     [make_sure_exists(p) for p in input_files + [proxy_file]]
