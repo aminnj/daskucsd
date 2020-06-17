@@ -26,14 +26,17 @@ conda config --add channels conda-forge
 conda install --name base conda-pack -y
 
 # create environments with as much stuff from anaconda
-conda create --name workerenv uproot dask -y
-conda create --name analysisenv uproot dask matplotlib pandas jupyter hdfs3 -y
+conda create --name daskworkerenv uproot dask dask-jobqueue pyarrow fastparquet numba numexpr -y
+conda create --name daskanalysisenv uproot dask dask-jobqueue matplotlib pandas jupyter hdfs3 pyarrow fastparquet numba numexpr -y
+
 # and then install residual packages with pip
-conda run --name workerenv pip install dask-jobqueue
-conda run --name analysisenv pip install jupyter-server-proxy dask-jobqueue
+conda run --name daskworkerenv pip install git+git://github.com/aminnj/yahist.git#egg=yahist -U
+conda run --name daskworkerenv pip install coffea
+conda run --name daskanalysisenv pip install git+git://github.com/aminnj/yahist.git#egg=yahist -U
+conda run --name daskanalysisenv pip install jupyter-server-proxy coffea autopep8 jupyter_nbextensions_configurator
 
 # make the tarball for the worker nodes
-conda pack -n workerenv --arcroot workerenv -f --format tar.gz \
+conda pack -n daskworkerenv --arcroot daskworkerenv -f --format tar.gz \
     --compress-level 9 -j 8 --exclude "*.pyc" --exclude "*.js.map" --exclude "*.a"
 ```
 

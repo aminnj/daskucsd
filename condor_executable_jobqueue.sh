@@ -21,15 +21,15 @@ fi
 
 mkdir temp ; cd temp
 
-mv ../{workerenv.tar.*,*.py} .
+mv ../{daskworkerenv.tar.*,*.py} .
 echo "started extracting at $(date +%s)"
-tar xf workerenv.tar.*
+tar xf daskworkerenv.tar.*
 echo "finished extracting at $(date +%s)"
 
-source workerenv/bin/activate
+source daskworkerenv/bin/activate
 
 ls -lrth
 export PYTHONPATH=`pwd`:$PYTHONPATH
-export PATH=`pwd`/workerenv/bin:$PATH
+export PATH=`pwd`/daskworkerenv/bin:$PATH
 
 $@
