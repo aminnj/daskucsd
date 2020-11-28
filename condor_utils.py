@@ -8,14 +8,7 @@ from dask_jobqueue.htcondor import HTCondorJob, HTCondorCluster, quote_environme
 
 BASEDIR = os.path.dirname(os.path.realpath(__file__))
 
-def submit_workers(scheduler_url, dry_run=False, num_workers=1, blacklisted_machines=[
-            "sdsc-49.t2.ucsd.edu",
-            "sdsc-50.t2.ucsd.edu",
-            "sdsc-68.t2.ucsd.edu",
-            "cabinet-7-7-36.t2.ucsd.edu",
-            "cabinet-8-8-1.t2.ucsd.edu",
-            "cabinet-4-4-18.t2.ucsd.edu",
-    ], memory=4000, disk=20000, whitelisted_machines=[]):
+def submit_workers(scheduler_url, dry_run=False, num_workers=1, blacklisted_machines=[], memory=4000, disk=20000, whitelisted_machines=[]):
 
     template = """
 universe                = vanilla
@@ -74,7 +67,8 @@ class UCSDHTCondorJob(HTCondorJob):
     # -file doesn't exist for this condor version, and if the submit file name gets put
     # right after -queue 1, then condor thinks it's an argument to -queue, hence the -debug
     # sandwiched in between
-    submit_command = "condor_submit -queue 1 -debug"
+    # NO longer need to override `submit_command` after https://github.com/dask/dask-jobqueue/commit/c1e0a21a32d909edaf8fc1afb5a1d49b43f5bc33#diff-a384f2a64350f53bcec5f8a223f5d1f62d32cd1f6146febf1cee3400c548d284
+    # submit_command = "condor_submit -queue 1 -debug"
     executable = os.path.join(BASEDIR, "condor_executable_jobqueue.sh")
     config_name = "htcondor"
 
@@ -125,7 +119,9 @@ def make_htcondor_cluster(
             "memory": memory,
             "cores": cores,
             "log_directory": log_directory,
-            "dashboard_address": dashboard_address,
+            "scheduler_options": {
+                "dashboard_address": dashboard_address,
+                },
             "python": "python",
             "job_extra":  {
                 "should_transfer_files": "YES",
@@ -139,9 +135,9 @@ def make_htcondor_cluster(
                 "Stream_Output": False,
                 "Stream_Error": False,
                 "+DESIRED_Sites":'"T2_US_UCSD"',
-                # "Requirements": '((HAS_SINGULARITY=?=True) && (HAS_CVMFS_cms_cern_ch =?= true) && (TARGET.Machine != "sdsc-18.t2.ucsd.edu") && (TARGET.Machine != "sdsc-20.t2.ucsd.edu") && (TARGET.Machine != "cabinet-7-7-36.t2.ucsd.edu") && (TARGET.Machine != "cabinet-4-4-18.t2.ucsd.edu"))',
                 "Requirements": '((HAS_SINGULARITY=?=True) && (HAS_CVMFS_cms_cern_ch =?= true))',
                 },
+            "extra": ["--preload", "cachepreload.py"],
             }
     if local:
         params["+DESIRED_Sites"] = '"UAF"'
@@ -158,11 +154,11 @@ if __name__ == "__main__":
     parser.add_argument("-d", "--dry_run", help="echo submit file, but don't submit", action="store_true")
     parser.add_argument("-n", "--num_workers", help="number of workers", default=1, type=int)
     parser.add_argument("-b", "--blacklisted_machines", help="blacklisted machines", default=[
-            "sdsc-49.t2.ucsd.edu",
-            "sdsc-50.t2.ucsd.edu",
-            "sdsc-68.t2.ucsd.edu",
-            "cabinet-7-7-36.t2.ucsd.edu",
-            "cabinet-8-8-1.t2.ucsd.edu",
+            # "sdsc-49.t2.ucsd.edu",
+            # "sdsc-50.t2.ucsd.edu",
+            # "sdsc-68.t2.ucsd.edu",
+            # "cabinet-7-7-36.t2.ucsd.edu",
+            # "cabinet-8-8-1.t2.ucsd.edu",
     ], action="append")
     parser.add_argument("-w", "--whitelisted_machines", help="whitelisted machines", default=[], action="append")
     args = parser.parse_args()
