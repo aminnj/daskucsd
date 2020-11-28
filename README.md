@@ -39,6 +39,7 @@ conda run --name $ANALYSISENVNAME pip install yahist jupyter-server-proxy coffea
 # make the tarball for the worker nodes
 conda pack -n $WORKERENVNAME --arcroot daskworkerenv -f --format tar.gz \
     --compress-level 9 -j 8 --exclude "*.pyc" --exclude "*.js.map" --exclude "*.a"
+mv ${WORKERENVNAME}.tar.gz daskworkerenv.tar.gz
 ```
 
 
@@ -47,29 +48,25 @@ conda pack -n $WORKERENVNAME --arcroot daskworkerenv -f --format tar.gz \
 Need a scheduler and a set of workers. You can either set up do this manually 
 with some bash processes, or automatically within a jupyter notebook.
 
-#### Manually
-
-Start dask scheduler in a GNU screen/separate terminal:
-```
-( conda activate analysisenv && dask-scheduler --port 50123 )
-```
-
-Submit some workers:
-```bash
-python condor_utils.py -r <hostname:port of scheduler> -n 10
-```
-
-Start analysis jupyter notebook:
-```bash
-( conda activate analysisenv && jupyter notebook --no-browser )
-```
-
 #### Automatically
 
 ```bash
-( conda activate analysisenv && jupyter notebook --no-browser )
+conda activate analysisenv
+jupyter notebook --no-browser
 ```
 and then run `cluster.ipynb`.
+
+#### Manually
+
+```bash
+# start dask scheduler in a GNU screen/separate terminal
+( conda activate analysisenv && dask-scheduler --port 50123 )
+# submit some workers
+conda activate analysisenv
+python condor_utils.py -r "$(hostname):50123" -n 10
+# start analysis jupyter notebook
+jupyter notebook --no-browser
+```
 
 ## Misc notes
 
