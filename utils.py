@@ -1,68 +1,200 @@
 import functools
+import time
+import uproot
+from dask.distributed import as_completed
+from collections import defaultdict
+from tqdm.auto import tqdm
 
 @functools.lru_cache(maxsize=256)
-def get_chunking(filelist, chunksize, treename="Events", workers=12, skip_bad_files=False):
+def get_chunking(filelist, chunksize, treename="Events", workers=12, skip_bad_files=False, xrootd=False, client=None, use_dask=False):
     """
     Return 2-tuple of
     - chunks: triplets of (filename,entrystart,entrystop) calculated with input `chunksize` and `filelist`
     - total_nevents: total event count over `filelist`
     """
     import uproot
-    import awkward
     from tqdm.auto import tqdm
     import concurrent.futures
+
+    if xrootd:
+        temp = []
+        for fname in filelist:
+            if fname.startswith("/hadoop/cms"):
+                temp.append(fname.replace("/hadoop/cms","root://redirector.t2.ucsd.edu/"))
+            else:
+                temp.append(fname.replace("/store/","root://xrootd.t2.ucsd.edu:2040//store/"))
+        filelist = temp
+
     chunksize = int(chunksize)
     chunks = []
     nevents = 0
-    if skip_bad_files:
-        # slightly slower (serial loop), but can skip bad files
-        for fname in tqdm(filelist):
+    
+    if use_dask:
+        if not client:
+            from dask.distributed import get_client
+            client = get_client()
+        def numentries(fname):
+            import uproot
             try:
-                items = uproot.numentries(fname, treename, total=False).items()
-            except (IndexError, ValueError) as e:
-                print("Skipping bad file", fname)
-                continue
-            for fn, nentries in items:
-                nevents += nentries
-                for index in range(nentries // chunksize + 1):
-                    chunks.append((fn, chunksize*index, min(chunksize*(index+1), nentries)))
-    elif filelist[0].endswith(".awkd"):
-        for fname in tqdm(filelist):
-            f = awkward.load(fname,whitelist=awkward.persist.whitelist + [['blosc', 'decompress']])
-            nentries = len(f["run"])
-            nevents += nentries
-            for index in range(nentries // chunksize + 1):
-                chunks.append((fname, chunksize*index, min(chunksize*(index+1), nentries)))
-    else:
-        executor = None if len(filelist) < 5 else concurrent.futures.ThreadPoolExecutor(min(workers, len(filelist)))
-        for fn, nentries in uproot.numentries(filelist, treename, total=False, executor=executor).items():
+                return (fname,uproot.numentries(fname,treename))
+            except:
+                return (fname,-1)
+        futures = client.map(numentries, filelist)
+        info = []
+        for future, result in tqdm(as_completed(futures, with_results=True), total=len(futures)):
+            info.append(result)
+        for fn, nentries in info:
+            if nentries < 0:
+                if skip_bad_files:
+                    print("Skipping bad file: {}".format(fn))
+                    continue
+                else: raise RuntimeError("Bad file: {}".format(fn))
             nevents += nentries
             for index in range(nentries // chunksize + 1):
                 chunks.append((fn, chunksize*index, min(chunksize*(index+1), nentries)))
+    else:
+        if skip_bad_files:
+            # slightly slower (serial loop), but can skip bad files
+            for fname in tqdm(filelist):
+                try:
+                    items = uproot.numentries(fname, treename, total=False).items()
+                except (IndexError, ValueError) as e:
+                    print("Skipping bad file", fname)
+                    continue
+                for fn, nentries in items:
+                    nevents += nentries
+                    for index in range(nentries // chunksize + 1):
+                        chunks.append((fn, chunksize*index, min(chunksize*(index+1), nentries)))
+        else:
+            executor = None if len(filelist) < 5 else concurrent.futures.ThreadPoolExecutor(min(workers, len(filelist)))
+            for fn, nentries in uproot.numentries(filelist, treename, total=False, executor=executor).items():
+                nevents += nentries
+                for index in range(nentries // chunksize + 1):
+                    chunks.append((fn, chunksize*index, min(chunksize*(index+1), nentries)))
+
     return chunks, nevents
 
-def bokeh_output_notebook():
-    from bokeh.io import output_notebook
-    output_notebook()
 
-def plot_timeflow(taskstream):
-    """
-    taskstream from `client.get_task_stream(count=len(futures))`
-    """
+def combine_dicts(dicts):
+    new_dict = dict()
+    for d in dicts:
+        for k,v in d.items():
+            if k not in new_dict:
+                new_dict[k] = v
+            else:
+                new_dict[k] += v
+    return new_dict
+
+def clear_tree_cache(client=None):
+    if not client:
+        from dask.distributed import get_client
+        client = get_client()
+    def f():
+        from dask.distributed import get_worker
+        worker = get_worker()
+        if hasattr(worker, "tree_cache"):
+            worker.tree_cache.clear()
+    client.run(f)
+
+
+def get_results(func, fnames, chunksize=1e5, client=None, use_tree_cache=False):
+    if not client:
+        from dask.distributed import get_client
+        client = get_client()
+    print("Making chunks for workers")
+    chunks, nevents_total = get_chunking(tuple(fnames), chunksize=chunksize, use_dask=True)
+    print(f"Processing {len(chunks)} chunks")
+    process = use_chunk_input(func, use_tree_cache=use_tree_cache)
+    
+    chunk_workers = None
+    if use_tree_cache:
+        def f():
+            from dask.distributed import get_worker
+            worker = get_worker()
+            return list(worker.tree_cache.keys())
+        filename_to_worker = defaultdict(list)
+        for worker, filenames in client.run(f).items():
+            for filename in filenames:
+                filename_to_worker[filename].append(worker)
+        chunk_workers = [filename_to_worker[chunk[0]] for chunk in chunks]
+
+    futures = client.map(process, chunks, workers=chunk_workers)
+    t0 = time.time()
+    bar = tqdm(total=nevents_total, unit="events", unit_scale=True)
+    ac = as_completed(futures, with_results=True)
+    results = []
+    for future, result in ac:
+        results.append(result)
+        bar.update(result["nevents_processed"])
+    bar.close()
+    t1 = time.time()
+    results = combine_dicts(results)
+    nevents_processed = results["nevents_processed"]
+    print(f"Processed {nevents_processed:.5g} input events in {t1-t0:.1f}s ({1.0e-3*nevents_processed/(t1-t0):.2f}kHz)")
+    return results
+
+
+class DataFrameWrapper(object):
+    def __init__(self, filename, entrystart=None, entrystop=None, treename="Events", use_tree_cache=False):
+        self.filename = filename
+        self.entrystart = entrystart
+        self.entrystop = entrystop
+        self.treename = treename
+        self.data = dict()
+        
+        from dask.distributed import get_worker
+        worker = get_worker()
+        if use_tree_cache and hasattr(worker, "tree_cache"):
+            cache = worker.tree_cache
+            if filename not in cache:
+                cache[filename] = uproot.open(filename)["Events"]
+            self.t = cache[filename]
+        else:
+            self.t = uproot.open(filename)["Events"]
+
+    def __getitem__(self, key):
+        if key not in self.data:
+            self.data[key] = self.t.array(key, entrystart=self.entrystart, entrystop=self.entrystop)
+        return self.data[key]
+
+    def __len__(self):
+        if None not in [self.entrystart, self.entrystop]:
+            return self.entrystop-self.entrystart
+        return len(self.t)
+
+def use_chunk_input(func, **kwargs):
+    def wrapper(chunk):
+        df = DataFrameWrapper(*chunk, **kwargs)
+        t0 = time.time()
+        out = func(df)
+        t1 = time.time()
+        out["nevents_processed"] = len(df)
+        out["t_start"] = [t0]
+        out["t_stop"] = [t1]
+        try:
+            from dask.distributed import get_worker
+            out["worker_name"] = [get_worker().address]
+        except:
+            out["worker_name"] = ["local"]
+        return out
+    return wrapper
+
+def plot_timeflow(results):
     from bokeh.io import show, output_notebook
     from bokeh.models import ColumnDataSource
     from bokeh.plotting import figure
     import pandas as pd
 
-    df = pd.DataFrame(taskstream)
-    df["tstart"] = df["startstops"].str[0].str[1]
-    df["tstop"] = df["startstops"].str[0].str[2]
-    df = df[["worker","tstart","tstop"]].sort_values(["worker","tstart"])
-    df[["tstart","tstop"]] -= df["tstart"].min()
-    df["worker"] = df["worker"].str.replace("tcp://","")
+    output_notebook()
 
-    if df["tstop"].max() > 10.: mult, unit = 1, "s"
-    else: mult, unit = 1000, "ms"
+    df = pd.DataFrame()
+    df["worker"] = results["worker_name"]
+    df["tstart"] = results["t_start"]
+    df["tstop"] = results["t_stop"]
+    df[["tstart","tstop"]] -= df["tstart"].min()
+    df["worker"] = df["worker"].astype("category").cat.codes
+
+    mult, unit = 1, "s"
 
     df[["tstart","tstop"]] *= mult
     df["duration"] = df["tstop"] - df["tstart"]
@@ -80,7 +212,8 @@ def plot_timeflow(taskstream):
         "median intertask time = {:.2f}{}".format(group.apply(lambda x:x["tstart"].shift(-1)-x["tstop"]).median(),unit),
         ]))
 
-    p = figure(y_range=group, x_range=[0,df["tstop"].max()], title=title,
+    p = figure(
+        title=title,
                tooltips = [
                    ["worker","@worker"],
                    ["start","@{tstart}"+unit],
@@ -91,89 +224,8 @@ def plot_timeflow(taskstream):
     p.hbar(y="worker", left="tstart", right="tstop", height=1.0, line_color="black", source=df)
     p.xaxis.axis_label = "elapsed time since start ({})".format(unit)
     p.yaxis.axis_label = "worker"
-    p.plot_width = 800
-    p.plot_height = 350
+    p.plot_width = 600
+    p.plot_height = 300
 
-    try:
-        show(p)
-    except:
-        show(p)
+    show(p)
 
-
-def plot_cumulative_events(taskstream,futures,chunks, ax=None):
-    """
-    taskstream from `client.get_task_stream(count=len(futures))`
-    """
-    import pandas as pd
-    import matplotlib.pyplot as plt
-    import numpy as np
-    lut = dict((future.key,chunk) for future,chunk in zip(futures,chunks))
-    df = pd.DataFrame(taskstream)
-    df["chunk"] = df.key.map(lut)
-    df["estart"] = df["chunk"].str[1]
-    df["estop"] = df["chunk"].str[2]
-    df["tstart"] = df["startstops"].str[0].str[1]
-    df["tstop"] = df["startstops"].str[0].str[2]
-    df["worker"] = df["worker"].str.replace("tcp://","")
-    df["elapsed"] = df["tstop"]-df["tstart"]
-    df[["tstart", "tstop"]] -= df["tstart"].min()
-    df = df.sort_values("tstop")
-    if ax is None:
-        fig, ax = plt.subplots()
-    xs, ys = df["tstop"], (df["estop"]-df["estart"]).cumsum()/1e6
-    ax.plot(xs, ys)
-
-    # https://stackoverflow.com/questions/13691775/python-pinpointing-the-linear-part-of-a-slope
-    # create convolution kernel for calculating
-    # the smoothed second order derivative
-    smooth_width = int(len(xs)*0.5)
-    x1 = np.linspace(-3, 3, smooth_width)
-    norm = np.sum(np.exp(-x1**2)) * (x1[1]-x1[0])
-    y1 = (4*x1**2 - 2) * np.exp(-x1**2) / smooth_width*8
-    y_conv = np.convolve(ys, y1, mode="same")
-    central = (np.abs(y_conv) < y_conv.std()/2.0)
-    if central.sum() < 3:
-        central = np.ones(len(xs))>0
-        print("Warning! Didn't find a good flat region to fit. Taking everything.")
-    m, b = np.polyfit(xs[central], ys[central], 1)
-    # fit again with points closest to the first fit
-    resids = (m*xs+b)-ys
-    better = (np.abs(resids-resids.mean())/resids.std() < 1.0)
-    m, b = np.polyfit(xs[better & central], ys[better & central], 1)
-    ax.plot(xs[better & central], m*xs[better & central] + b,
-            label="fit ({:.2f}Mevents/s)".format(m))
-    ax.set_xlabel("time since start [s]")
-    ax.set_ylabel("cumulative Mevents")
-    ax.set_title("Processed {:.2f}Mevents in {:.2f}s @ {:.3f}MHz".format(
-        ys.max(), xs.max(), ys.max()/xs.max()))
-    ax.legend()
-
-def get_tree_and_branchcache(fname,cache_tree=True,cache_branches=True,xrootd=False):
-    """
-    return (potentially cached) uproot tree object and array/branch cache object
-    works on worker and locally, though locally no caching is done
-    """
-    from distributed import get_worker
-    islocal = False
-    if xrootd:
-        fname = fname.replace("/hadoop/cms","root://redirector.t2.ucsd.edu/")
-    try:
-        worker = get_worker()
-    except ValueError:
-        islocal = True
-    import uproot
-    cache = None
-    if islocal:
-        t = uproot.open(fname)["Events"]
-    else:
-        if not cache_tree:
-            t = uproot.open(fname)["Events"]
-        elif fname in worker.tree_cache:
-            t = worker.tree_cache[fname]
-        else:
-            t = uproot.open(fname)["Events"]
-            worker.tree_cache[fname] = t
-        if cache_branches:
-            cache = worker.array_cache
-        worker.nevents += len(t)
-    return t, cache
