@@ -97,7 +97,7 @@ def clear_tree_cache(client=None):
     client.run(f)
 
 
-def get_results(func, fnames, chunksize=1e5, client=None, use_tree_cache=False):
+def get_results(func, fnames, chunksize=250e3, client=None, use_tree_cache=False):
     if not client:
         from dask.distributed import get_client
         client = get_client()
