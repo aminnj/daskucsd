@@ -33,12 +33,12 @@ conda create --name $WORKERENVNAME uproot dask dask-jobqueue matplotlib pandas j
 conda create --name $ANALYSISENVNAME uproot dask dask-jobqueue matplotlib pandas jupyter pyarrow fastparquet numba numexpr bottleneck -y
 
 # and then install residual packages with pip
-conda run --name $WORKERENVNAME pip install yahist coffea awkward
-conda run --name $ANALYSISENVNAME pip install yahist jupyter-server-proxy coffea autopep8 jupyter_nbextensions_configurator awkward
+conda run --name $WORKERENVNAME pip install yahist coffea awkward0 uproot3
+conda run --name $ANALYSISENVNAME pip install yahist jupyter-server-proxy coffea jupyter_nbextensions_configurator awkward0 uproot3
 
 # make the tarball for the worker nodes
 conda pack -n $WORKERENVNAME --arcroot daskworkerenv -f --format tar.gz \
-    --compress-level 9 -j 8 --exclude "*.pyc" --exclude "*.js.map" --exclude "*.a"
+    --compress-level 9 -j 8 --exclude "*.pyc" --exclude "*.js.map" --exclude "*.a" --exclude "*pandoc"
 mv ${WORKERENVNAME}.tar.gz daskworkerenv.tar.gz
 ```
 

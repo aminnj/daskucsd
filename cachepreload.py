@@ -1,6 +1,15 @@
+def set_dask_config():
+    import dask
+    dask.config.set({'distributed.worker.memory.target': 0.85,
+                     'distributed.worker.memory.spill': 0.90,
+                     'distributed.worker.memory.pause': 0.95,
+                     'distributed.worker.memory.terminate': 0.99})
+
 def dask_setup(worker):
     import os
-    from cachetools import LRUCache
+    from uproot4.cache import LRUCache
+
+    set_dask_config()
 
     def get_classads():
         fname = os.getenv("_CONDOR_JOB_AD")

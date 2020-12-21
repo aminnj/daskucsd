@@ -8,6 +8,13 @@ from dask_jobqueue.htcondor import HTCondorJob, HTCondorCluster, quote_environme
 
 BASEDIR = os.path.dirname(os.path.realpath(__file__))
 
+def set_dask_config():
+    import dask
+    dask.config.set({'distributed.worker.memory.target': 0.85,
+                     'distributed.worker.memory.spill': 0.90,
+                     'distributed.worker.memory.pause': 0.95,
+                     'distributed.worker.memory.terminate': 0.99})
+
 def submit_workers(scheduler_url, dry_run=False, num_workers=1, blacklisted_machines=[], memory=4000, disk=20000, whitelisted_machines=[]):
 
     template = """
@@ -106,6 +113,8 @@ def make_htcondor_cluster(
         dashboard_address=8787,
         ):
 
+    set_dask_config()
+
     input_files = [os.path.join(BASEDIR, x) for x in ["utils.py","cachepreload.py","daskworkerenv.tar.gz"]]
     log_directory = os.path.join(BASEDIR, "logs/")
     proxy_file = "/tmp/x509up_u{0}".format(os.getuid())
@@ -137,7 +146,9 @@ def make_htcondor_cluster(
                 "+DESIRED_Sites":'"T2_US_UCSD"',
                 "Requirements": '((HAS_SINGULARITY=?=True) && (HAS_CVMFS_cms_cern_ch =?= true))',
                 },
-            "extra": ["--preload", "cachepreload.py"],
+            "extra": [
+                "--preload", "cachepreload.py",
+                ],
             }
     if local:
         params["+DESIRED_Sites"] = '"UAF"'

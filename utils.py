@@ -1,9 +1,11 @@
 import functools
 import time
 import uproot
-from dask.distributed import as_completed
-from collections import defaultdict
+import uproot4
 from tqdm.auto import tqdm
+import concurrent.futures
+from dask.distributed import as_completed, get_client, get_worker
+from collections import defaultdict
 
 @functools.lru_cache(maxsize=256)
 def get_chunking(filelist, chunksize, treename="Events", workers=12, skip_bad_files=False, xrootd=False, client=None, use_dask=False):
@@ -12,9 +14,6 @@ def get_chunking(filelist, chunksize, treename="Events", workers=12, skip_bad_fi
     - chunks: triplets of (filename,entrystart,entrystop) calculated with input `chunksize` and `filelist`
     - total_nevents: total event count over `filelist`
     """
-    import uproot
-    from tqdm.auto import tqdm
-    import concurrent.futures
 
     if xrootd:
         temp = []
@@ -31,10 +30,8 @@ def get_chunking(filelist, chunksize, treename="Events", workers=12, skip_bad_fi
     
     if use_dask:
         if not client:
-            from dask.distributed import get_client
             client = get_client()
         def numentries(fname):
-            import uproot
             try:
                 return (fname,uproot.numentries(fname,treename))
             except:
@@ -87,29 +84,25 @@ def combine_dicts(dicts):
 
 def clear_tree_cache(client=None):
     if not client:
-        from dask.distributed import get_client
         client = get_client()
     def f():
-        from dask.distributed import get_worker
         worker = get_worker()
         if hasattr(worker, "tree_cache"):
             worker.tree_cache.clear()
     client.run(f)
 
 
-def get_results(func, fnames, chunksize=250e3, client=None, use_tree_cache=False):
+def get_results(func, fnames, chunksize=250e3, client=None, use_tree_cache=False, skip_bad_files=False, skip_tail_fraction=1.0):
     if not client:
-        from dask.distributed import get_client
         client = get_client()
     print("Making chunks for workers")
-    chunks, nevents_total = get_chunking(tuple(fnames), chunksize=chunksize, use_dask=True)
+    chunks, nevents_total = get_chunking(tuple(fnames), chunksize=chunksize, use_dask=True, skip_bad_files=skip_bad_files)
     print(f"Processing {len(chunks)} chunks")
     process = use_chunk_input(func, use_tree_cache=use_tree_cache)
     
     chunk_workers = None
     if use_tree_cache:
         def f():
-            from dask.distributed import get_worker
             worker = get_worker()
             return list(worker.tree_cache.keys())
         filename_to_worker = defaultdict(list)
@@ -126,40 +119,51 @@ def get_results(func, fnames, chunksize=250e3, client=None, use_tree_cache=False
     for future, result in ac:
         results.append(result)
         bar.update(result["nevents_processed"])
+        if (skip_tail_fraction < 1.0) and (1.0*len(results)/len(futures) >= skip_tail_fraction):
+            print(f"Reached {100*skip_tail_fraction:.1f}% completion. Ignoring tail tasks")
+            break
     bar.close()
     t1 = time.time()
     results = combine_dicts(results)
+    list(map(lambda x: x.cancel(), futures))
+    del futures
     nevents_processed = results["nevents_processed"]
     print(f"Processed {nevents_processed:.5g} input events in {t1-t0:.1f}s ({1.0e-3*nevents_processed/(t1-t0):.2f}kHz)")
     return results
 
 
 class DataFrameWrapper(object):
-    def __init__(self, filename, entrystart=None, entrystop=None, treename="Events", use_tree_cache=False):
+    def __init__(self, filename, entry_start=None, entry_stop=None, treename="Events", use_tree_cache=False):
         self.filename = filename
-        self.entrystart = entrystart
-        self.entrystop = entrystop
+        self.entry_start = entry_start
+        self.entry_stop = entry_stop
         self.treename = treename
         self.data = dict()
         
-        from dask.distributed import get_worker
-        worker = get_worker()
-        if use_tree_cache and hasattr(worker, "tree_cache"):
-            cache = worker.tree_cache
+        cache = None
+        try:
+            from dask.distributed import get_worker
+            worker = get_worker()
+            if use_tree_cache and hasattr(worker, "tree_cache"):
+                cache = worker.tree_cache
+        except:
+            pass
+        
+        if cache is not None:
             if filename not in cache:
-                cache[filename] = uproot.open(filename)["Events"]
+                cache[filename] = uproot4.open(filename)[treename]
             self.t = cache[filename]
         else:
-            self.t = uproot.open(filename)["Events"]
+            self.t = uproot4.open(filename)[treename]
 
     def __getitem__(self, key):
         if key not in self.data:
-            self.data[key] = self.t.array(key, entrystart=self.entrystart, entrystop=self.entrystop)
+            self.data[key] = self.t.get(key).array(entry_start=self.entry_start, entry_stop=self.entry_stop)
         return self.data[key]
 
     def __len__(self):
-        if None not in [self.entrystart, self.entrystop]:
-            return self.entrystop-self.entrystart
+        if None not in [self.entry_start, self.entry_stop]:
+            return self.entry_stop-self.entry_start
         return len(self.t)
 
 def use_chunk_input(func, **kwargs):
@@ -172,7 +176,6 @@ def use_chunk_input(func, **kwargs):
         out["t_start"] = [t0]
         out["t_stop"] = [t1]
         try:
-            from dask.distributed import get_worker
             out["worker_name"] = [get_worker().address]
         except:
             out["worker_name"] = ["local"]
@@ -229,3 +232,55 @@ def plot_timeflow(results):
 
     show(p)
 
+
+def monitor_and_kill_stuck_workers(threshold=90., dryrun=False):
+    from IPython.display import clear_output, display
+    import ipywidgets
+    import datetime
+    import threading
+    import time
+
+    output = ipywidgets.Output()
+    display(output)
+
+    def monitor():
+
+        monitor_interval = 5.0 # seconds
+
+        nloops = 100000 # make 100000 eventually to never end
+
+        # (worker, taskid) -> [tstart, tstop]
+        runtimes_old = dict()
+        runtimes_new = dict()
+
+        output.append_stdout(f"Looking for workers that are taking more than {threshold:.1f}s per task, and killing them.")
+
+        for _ in range(nloops):
+
+            t = time.time()
+            for worker,taskids in client.processing().items():
+                # only care about first task in lineup
+                for taskid in taskids[:1]:
+                    key = (worker, taskid)
+                    tstart = tstop = t
+                    if key in runtimes_old:
+                        tstart = runtimes_old[key][0]
+                    runtimes_new[key] = [tstart, tstop]
+
+            workers_to_kill = []
+            for (worker,taskid),(tstart,tstop) in runtimes_new.items():
+                dt = tstop - tstart
+                if dt >= threshold:
+                    now = datetime.datetime.now()
+                    output.append_stdout(f"[{now}] Killing worker {worker} (stuck for {dt:.1f}s)\n")
+                    workers_to_kill.append(worker)
+            if not dryrun:
+                client.retire_workers(workers_to_kill)
+
+            runtimes_old, runtimes_new = dict(runtimes_new), dict()
+
+            time.sleep(monitor_interval)
+
+    thread = threading.Thread(target=monitor)
+    thread.start()
+    return thread
