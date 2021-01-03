@@ -106,11 +106,13 @@ def make_sure_exists(path, make=False):
 
 
 def make_htcondor_cluster(
-        disk = "8GB",
+        disk = "4GB",
         memory = "4GB",
         cores = 1,
         local=False,
         dashboard_address=8787,
+        blacklisted_machines=[],
+        whitelisted_machines=[],
         ):
 
     set_dask_config()
@@ -122,6 +124,11 @@ def make_htcondor_cluster(
     [make_sure_exists(p) for p in input_files + [proxy_file]]
     make_sure_exists(log_directory, make=True)
 
+    extra_requirements = "True"
+    if blacklisted_machines:
+        extra_requirements = " && ".join(map(lambda x: '(TARGET.Machine != "{0}")'.format(x),blacklisted_machines))
+    if whitelisted_machines:
+        extra_requirements = " || ".join(map(lambda x: '(TARGET.Machine == "{0}")'.format(x),whitelisted_machines))
 
     params = {
             "disk": disk,
@@ -140,11 +147,11 @@ def make_htcondor_cluster(
                 "transfer_input_files": ",".join(input_files),
                 "JobBatchName": '"daskworker"',
                 "x509userproxy": proxy_file,
-                "+SingularityImage":'"/cvmfs/singularity.opensciencegrid.org/bbockelm/cms:rhel6"',
+                "+SingularityImage":'"/cvmfs/singularity.opensciencegrid.org/cmssw/cms:rhel6-m202006"',
                 "Stream_Output": False,
                 "Stream_Error": False,
                 "+DESIRED_Sites":'"T2_US_UCSD"',
-                "Requirements": '((HAS_SINGULARITY=?=True) && (HAS_CVMFS_cms_cern_ch =?= true))',
+                "Requirements": '((HAS_SINGULARITY=?=True) && (HAS_CVMFS_cms_cern_ch =?= true) && {extra_requirements})',
                 },
             "extra": [
                 "--preload", "cachepreload.py",
