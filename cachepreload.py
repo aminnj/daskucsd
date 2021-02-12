@@ -7,7 +7,7 @@ def set_dask_config():
 
 def dask_setup(worker):
     import os
-    from uproot4.cache import LRUCache
+    import uproot4
 
     set_dask_config()
 
@@ -24,7 +24,7 @@ def dask_setup(worker):
                 d[k.strip()] = v.strip().lstrip('"').strip('"')
         return d
     worker.classads = get_classads()
-    worker.tree_cache = LRUCache(100)
+    worker.tree_cache = uproot4.cache.LRUCache(100)
 
     def numtreescached_metric(worker):
         if hasattr(worker,"tree_cache"):
