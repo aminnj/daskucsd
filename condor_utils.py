@@ -33,7 +33,7 @@ RequestMemory = {memory}
 RequestDisk = {disk}
 x509userproxy={proxy}
 +DESIRED_Sites="T2_US_UCSD"
-+SingularityImage="/cvmfs/singularity.opensciencegrid.org/cmssw/cms:rhel6-m202006"
++SingularityImage="/cvmfs/singularity.opensciencegrid.org/cmssw/cms:rhel7-m202006"
 JobBatchName = "daskworker"
 Requirements = ((HAS_SINGULARITY=?=True) && (HAS_CVMFS_cms_cern_ch =?= true) && {extra_requirements})
 Arguments = {scheduler_url}
@@ -113,16 +113,17 @@ def make_htcondor_cluster(
         dashboard_address=8787,
         blacklisted_machines=[],
         whitelisted_machines=[],
+        tarballpath="/hadoop/cms/store/user/{}/daskenvs/daskworkerenv.tar.gz".format(os.getenv("USER")),
         ):
 
     set_dask_config()
 
-    input_files = [os.path.join(BASEDIR, x) for x in ["utils.py","cachepreload.py","daskworkerenv.tar.gz"]]
-    # input_files = [os.path.join(BASEDIR, x) for x in ["utils.py","cachepreload.py"]]
+    # input_files = [os.path.join(BASEDIR, x) for x in ["utils.py","cachepreload.py","daskworkerenv.tar.gz"]]
+    input_files = [os.path.join(BASEDIR, x) for x in ["utils.py","cachepreload.py"]]
     log_directory = os.path.join(BASEDIR, "logs/")
     proxy_file = "/tmp/x509up_u{0}".format(os.getuid())
 
-    [make_sure_exists(p) for p in input_files + [proxy_file]]
+    [make_sure_exists(p) for p in input_files + [proxy_file, tarballpath]]
     make_sure_exists(log_directory, make=True)
 
     extra_requirements = "True"
@@ -130,6 +131,8 @@ def make_htcondor_cluster(
         extra_requirements = " && ".join(map(lambda x: '(TARGET.Machine != "{0}")'.format(x),blacklisted_machines))
     if whitelisted_machines:
         extra_requirements = " || ".join(map(lambda x: '(TARGET.Machine == "{0}")'.format(x),whitelisted_machines))
+
+    xrdpath = "root://redirector.t2.ucsd.edu//store/{}".format(tarballpath.split("/store/",1)[1])
 
     params = {
             "disk": disk,
@@ -148,7 +151,8 @@ def make_htcondor_cluster(
                 "transfer_input_files": ",".join(input_files),
                 "JobBatchName": '"daskworker"',
                 "x509userproxy": proxy_file,
-                "+SingularityImage":'"/cvmfs/singularity.opensciencegrid.org/cmssw/cms:rhel6-m202006"',
+                "+tarballpath":'"{}"'.format(xrdpath),
+                "+SingularityImage":'"/cvmfs/singularity.opensciencegrid.org/cmssw/cms:rhel7-m202006"',
                 "Stream_Output": False,
                 "Stream_Error": False,
                 "+DESIRED_Sites":'"T2_US_UCSD"',

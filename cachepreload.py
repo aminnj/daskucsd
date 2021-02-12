@@ -35,6 +35,13 @@ def dask_setup(worker):
 
     try:
         # Load some imports initially
+        import pdroot
+        import yahist
+    except:
+        pass
+
+    try:
+        # Load some imports initially
         import coffea.processor
         import coffea.executor
     except:

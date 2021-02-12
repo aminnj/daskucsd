@@ -11,7 +11,7 @@ cd daskucsd
 ```
 
 Install conda and get all the dependencies:
-```
+```bash
 curl -O -L https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
 bash Miniconda3-latest-Linux-x86_64.sh -b 
 
@@ -29,17 +29,29 @@ WORKERENVNAME="daskworkerenv"
 ANALYSISENVNAME="daskanalysisenv"
 
 # create environments with as much stuff from anaconda
-conda create --name $WORKERENVNAME uproot dask dask-jobqueue matplotlib pandas jupyter pyarrow fastparquet numba numexpr bottleneck -y
-conda create --name $ANALYSISENVNAME uproot dask dask-jobqueue matplotlib pandas jupyter pyarrow fastparquet numba numexpr bottleneck -y
+# ipython==7.10.1 because of https://stackoverflow.com/questions/63413807/deprecation-warning-from-jupyter-should-run-async-will-not-call-transform-c
+# dask>=2020 failing for some reason
+packages="uproot dask<=2.30.1 dask-jobqueue==0.7.2 matplotlib pandas jupyter pyarrow fastparquet numba numexpr bottleneck ipython<=7.10.1"
+conda create --name $WORKERENVNAME $packages -y
+conda create --name $ANALYSISENVNAME $packages -y
 
 # and then install residual packages with pip
-conda run --name $WORKERENVNAME pip install yahist coffea awkward0 uproot3
-conda run --name $ANALYSISENVNAME pip install yahist jupyter-server-proxy coffea jupyter_nbextensions_configurator awkward0 uproot3
+conda run --name $WORKERENVNAME pip install yahist coffea awkward0 uproot3 pdroot
+conda run --name $ANALYSISENVNAME pip install yahist jupyter-server-proxy coffea jupyter_nbextensions_configurator awkward0 uproot3 pdroot
 
 # make the tarball for the worker nodes
 conda pack -n $WORKERENVNAME --arcroot daskworkerenv -f --format tar.gz \
     --compress-level 9 -j 8 --exclude "*.pyc" --exclude "*.js.map" --exclude "*.a" --exclude "*pandoc"
-mv ${WORKERENVNAME}.tar.gz daskworkerenv.tar.gz
+
+# if that command errors (conflicting awkward/uproot versions between conda install and pip install), then do
+#     conda install --name $WORKERENVNAME uproot --force-reinstall --update-deps
+#     conda install --name $ANALYSISENVNAME uproot --force-reinstall --update-deps
+# and then repeat the command
+
+# if not copied to this exact directory, that's fine, but you will need to then specify
+# the `tarballpath` kwarg for `make_htcondor_cluster()`
+mkdir -p /hadoop/cms/store/user/$USER/daskenvs/
+cp ${WORKERENVNAME}.tar.gz /hadoop/cms/store/user/$USER/daskenvs/daskworkerenv.tar.gz
 ```
 
 
@@ -51,7 +63,7 @@ with some bash processes, or automatically within a jupyter notebook.
 #### Automatically
 
 ```bash
-conda activate analysisenv
+conda activate $ANALYSISENVNAME
 jupyter notebook --no-browser
 ```
 and then run `cluster.ipynb`.

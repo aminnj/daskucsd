@@ -21,12 +21,16 @@ fi
 
 mkdir temp ; cd temp
 
-mv ../{daskworkerenv.tar.*,*.py} .
+tarballpath=$(getjobad tarballpath)
+
+# mv ../{daskworkerenv.tar.*,*.py} .
 # xrdcp root://redirector.t2.ucsd.edu//store/user/namin/dask/daskworkerenv.tar.gz .
+xrdcp $tarballpath .
 mv ../*.py .
 echo "started extracting at $(date +%s)"
 tar xf daskworkerenv.tar.*
 echo "finished extracting at $(date +%s)"
+
 
 source daskworkerenv/bin/activate
 
@@ -38,5 +42,7 @@ export DASK_DISTRIBUTED__WORKER__MEMORY__TARGET=0.85
 export DASK_DISTRIBUTED__WORKER__MEMORY__SPILL=0.90
 export DASK_DISTRIBUTED__WORKER__MEMORY__PAUSE=0.95
 export DASK_DISTRIBUTED__WORKER__MEMORY__TERMINATE=0.99
+
+echo "Running command: $@"
 
 $@
