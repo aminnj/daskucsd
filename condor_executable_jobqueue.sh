@@ -22,6 +22,8 @@ fi
 mkdir temp ; cd temp
 
 mv ../{daskworkerenv.tar.*,*.py} .
+# xrdcp root://redirector.t2.ucsd.edu//store/user/namin/dask/daskworkerenv.tar.gz .
+mv ../*.py .
 echo "started extracting at $(date +%s)"
 tar xf daskworkerenv.tar.*
 echo "finished extracting at $(date +%s)"

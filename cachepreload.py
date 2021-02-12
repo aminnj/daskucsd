@@ -24,7 +24,7 @@ def dask_setup(worker):
                 d[k.strip()] = v.strip().lstrip('"').strip('"')
         return d
     worker.classads = get_classads()
-    worker.tree_cache = LRUCache(75)
+    worker.tree_cache = LRUCache(100)
 
     def numtreescached_metric(worker):
         if hasattr(worker,"tree_cache"):

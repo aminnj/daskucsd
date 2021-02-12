@@ -1,6 +1,6 @@
 import functools
 import time
-import uproot
+import uproot3
 import uproot4
 from tqdm.auto import tqdm
 import concurrent.futures
@@ -33,7 +33,7 @@ def get_chunking(filelist, chunksize, treename="Events", workers=12, skip_bad_fi
             client = get_client()
         def numentries(fname):
             try:
-                return (fname,uproot.numentries(fname,treename))
+                return (fname,uproot3.numentries(fname,treename))
             except:
                 return (fname,-1)
         futures = client.map(numentries, filelist)
@@ -54,7 +54,7 @@ def get_chunking(filelist, chunksize, treename="Events", workers=12, skip_bad_fi
             # slightly slower (serial loop), but can skip bad files
             for fname in tqdm(filelist):
                 try:
-                    items = uproot.numentries(fname, treename, total=False).items()
+                    items = uproot3.numentries(fname, treename, total=False).items()
                 except (IndexError, ValueError) as e:
                     print("Skipping bad file", fname)
                     continue
@@ -64,7 +64,7 @@ def get_chunking(filelist, chunksize, treename="Events", workers=12, skip_bad_fi
                         chunks.append((fn, chunksize*index, min(chunksize*(index+1), nentries)))
         else:
             executor = None if len(filelist) < 5 else concurrent.futures.ThreadPoolExecutor(min(workers, len(filelist)))
-            for fn, nentries in uproot.numentries(filelist, treename, total=False, executor=executor).items():
+            for fn, nentries in uproot3.numentries(filelist, treename, total=False, executor=executor).items():
                 nevents += nentries
                 for index in range(nentries // chunksize + 1):
                     chunks.append((fn, chunksize*index, min(chunksize*(index+1), nentries)))
@@ -116,17 +116,29 @@ def get_results(func, fnames, chunksize=250e3, client=None, use_tree_cache=False
     bar = tqdm(total=nevents_total, unit="events", unit_scale=True)
     ac = as_completed(futures, with_results=True)
     results = []
-    for future, result in ac:
-        results.append(result)
-        bar.update(result["nevents_processed"])
-        if (skip_tail_fraction < 1.0) and (1.0*len(results)/len(futures) >= skip_tail_fraction):
-            print(f"Reached {100*skip_tail_fraction:.1f}% completion. Ignoring tail tasks")
+    # for future, result in ac:
+    #     results.append(result)
+    #     bar.update(result["nevents_processed"])
+    #     if (skip_tail_fraction < 1.0) and (1.0*len(results)/len(futures) >= skip_tail_fraction):
+    #         print(f"Reached {100*skip_tail_fraction:.1f}% completion. Ignoring tail tasks")
+    #         break
+    for batch in ac.batches():
+        to_break = False
+        for future, result in batch:
+            results.append(result)
+            bar.update(result["nevents_processed"])
+            if (skip_tail_fraction < 1.0) and (1.0*len(results)/len(futures) >= skip_tail_fraction):
+                print(f"Reached {100*skip_tail_fraction:.1f}% completion. Ignoring tail tasks")
+                to_break = True
+                break
+        if to_break:
             break
     bar.close()
     t1 = time.time()
     results = combine_dicts(results)
-    list(map(lambda x: x.cancel(), futures))
-    del futures
+    client.cancel(futures, force=True)
+    # list(map(lambda x: x.cancel(), futures))
+    # del futures
     nevents_processed = results["nevents_processed"]
     print(f"Processed {nevents_processed:.5g} input events in {t1-t0:.1f}s ({1.0e-3*nevents_processed/(t1-t0):.2f}kHz)")
     return results

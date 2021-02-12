@@ -10,10 +10,10 @@ BASEDIR = os.path.dirname(os.path.realpath(__file__))
 
 def set_dask_config():
     import dask
-    dask.config.set({'distributed.worker.memory.target': 0.85,
-                     'distributed.worker.memory.spill': 0.90,
-                     'distributed.worker.memory.pause': 0.95,
-                     'distributed.worker.memory.terminate': 0.99})
+    dask.config.set({'distributed.worker.memory.target': 0.9,
+                     'distributed.worker.memory.spill': 1.0,
+                     'distributed.worker.memory.pause': 1.2,
+                     'distributed.worker.memory.terminate': 1.5})
 
 def submit_workers(scheduler_url, dry_run=False, num_workers=1, blacklisted_machines=[], memory=4000, disk=20000, whitelisted_machines=[]):
 
@@ -118,6 +118,7 @@ def make_htcondor_cluster(
     set_dask_config()
 
     input_files = [os.path.join(BASEDIR, x) for x in ["utils.py","cachepreload.py","daskworkerenv.tar.gz"]]
+    # input_files = [os.path.join(BASEDIR, x) for x in ["utils.py","cachepreload.py"]]
     log_directory = os.path.join(BASEDIR, "logs/")
     proxy_file = "/tmp/x509up_u{0}".format(os.getuid())
 
@@ -151,7 +152,7 @@ def make_htcondor_cluster(
                 "Stream_Output": False,
                 "Stream_Error": False,
                 "+DESIRED_Sites":'"T2_US_UCSD"',
-                "Requirements": '((HAS_SINGULARITY=?=True) && (HAS_CVMFS_cms_cern_ch =?= true) && {extra_requirements})',
+                "Requirements": f'((HAS_SINGULARITY=?=True) && (HAS_CVMFS_cms_cern_ch =?= true) && {extra_requirements})',
                 },
             "extra": [
                 "--preload", "cachepreload.py",
