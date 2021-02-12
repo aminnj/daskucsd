@@ -6,6 +6,7 @@ from tqdm.auto import tqdm
 import concurrent.futures
 from dask.distributed import as_completed, get_client, get_worker
 from collections import defaultdict
+import pdroot
 
 @functools.lru_cache(maxsize=256)
 def get_chunking(filelist, chunksize, treename="Events", workers=12, skip_bad_files=False, xrootd=False, client=None, use_dask=False):
@@ -92,13 +93,17 @@ def clear_tree_cache(client=None):
     client.run(f)
 
 
-def get_results(func, fnames, chunksize=250e3, client=None, use_tree_cache=False, skip_bad_files=False, skip_tail_fraction=1.0):
+def get_results(func, fnames, chunksize=250e3, client=None, use_tree_cache=False, skip_bad_files=False, skip_tail_fraction=1.0, wrap_func=True):
     if not client:
         client = get_client()
     print("Making chunks for workers")
     chunks, nevents_total = get_chunking(tuple(fnames), chunksize=chunksize, use_dask=True, skip_bad_files=skip_bad_files)
     print(f"Processing {len(chunks)} chunks")
-    process = use_chunk_input(func, use_tree_cache=use_tree_cache)
+    if wrap_func:
+        process = use_chunk_input(func, use_tree_cache=use_tree_cache)
+    else:
+        process = func
+
     
     chunk_workers = None
     if use_tree_cache:
@@ -180,7 +185,9 @@ class DataFrameWrapper(object):
 
 def use_chunk_input(func, **kwargs):
     def wrapper(chunk):
-        df = DataFrameWrapper(*chunk, **kwargs)
+        # df = DataFrameWrapper(*chunk, **kwargs)
+        fname, entry_start, entry_stop = chunk
+        df = pdroot.ChunkDataFrame(filename=fname, entry_start=entry_start, entry_stop=entry_stop)
         t0 = time.time()
         out = func(df)
         t1 = time.time()

@@ -30,8 +30,7 @@ ANALYSISENVNAME="daskanalysisenv"
 
 # create environments with as much stuff from anaconda
 # ipython==7.10.1 because of https://stackoverflow.com/questions/63413807/deprecation-warning-from-jupyter-should-run-async-will-not-call-transform-c
-# dask>=2020 failing for some reason
-packages="uproot dask<=2.30.1 dask-jobqueue==0.7.2 matplotlib pandas jupyter pyarrow fastparquet numba numexpr bottleneck ipython<=7.10.1"
+packages="uproot dask dask-jobqueue matplotlib pandas jupyter pyarrow fastparquet numba numexpr bottleneck ipython<=7.10.1"
 conda create --name $WORKERENVNAME $packages -y
 conda create --name $ANALYSISENVNAME $packages -y
 
