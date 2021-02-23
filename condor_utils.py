@@ -35,7 +35,7 @@ x509userproxy={proxy}
 +DESIRED_Sites="T2_US_UCSD"
 +SingularityImage="/cvmfs/singularity.opensciencegrid.org/cmssw/cms:rhel7-m202006"
 JobBatchName = "daskworker"
-Requirements = ((HAS_SINGULARITY=?=True) && (HAS_CVMFS_cms_cern_ch =?= true) && {extra_requirements})
+Requirements = ((HAS_SINGULARITY=?=True) && {extra_requirements})
 Arguments = {scheduler_url}
 queue {num_workers}
     """
