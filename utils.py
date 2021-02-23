@@ -121,12 +121,6 @@ def get_results(func, fnames, chunksize=250e3, client=None, use_tree_cache=False
     bar = tqdm(total=nevents_total, unit="events", unit_scale=True)
     ac = as_completed(futures, with_results=True)
     results = []
-    # for future, result in ac:
-    #     results.append(result)
-    #     bar.update(result["nevents_processed"])
-    #     if (skip_tail_fraction < 1.0) and (1.0*len(results)/len(futures) >= skip_tail_fraction):
-    #         print(f"Reached {100*skip_tail_fraction:.1f}% completion. Ignoring tail tasks")
-    #         break
     for batch in ac.batches():
         to_break = False
         for future, result in batch:
@@ -136,6 +130,8 @@ def get_results(func, fnames, chunksize=250e3, client=None, use_tree_cache=False
                 print(f"Reached {100*skip_tail_fraction:.1f}% completion. Ignoring tail tasks")
                 to_break = True
                 break
+        if len(results) > 500:
+            results = [combine_dicts(results)]
         if to_break:
             break
     bar.close()
