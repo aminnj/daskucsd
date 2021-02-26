@@ -92,6 +92,17 @@ def clear_tree_cache(client=None):
             worker.tree_cache.clear()
     client.run(f)
 
+def register_yahist_with_dask():
+    """
+    Register classes with dask so that it can serialize the underlying
+    numpy arrays a bit faster
+    """
+    try:
+        from yahist import Hist1D, Hist2D, register_with_dask
+        register_with_dask([Hist1D, Hist2D])
+    except:
+        pass
+
 
 def get_results(func, fnames, chunksize=250e3, client=None, use_tree_cache=False, skip_bad_files=False, skip_tail_fraction=1.0, wrap_func=True):
     if not client:
@@ -103,6 +114,8 @@ def get_results(func, fnames, chunksize=250e3, client=None, use_tree_cache=False
         process = use_chunk_input(func, use_tree_cache=use_tree_cache)
     else:
         process = func
+
+    register_yahist_with_dask()
 
     
     chunk_workers = None
